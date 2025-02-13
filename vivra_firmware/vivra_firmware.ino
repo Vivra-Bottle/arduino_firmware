@@ -1,4 +1,5 @@
 #include "HX711.h"
+#include <ArduinoBLE.h>
 
 // Define pins used for loadcell
 #define D_OUT  2  // Data pin (DT)
@@ -31,6 +32,11 @@ float alpha = 0.02;
 //Load cell variables
 long calibration_factor = 0;
 float known_weight = 10.0;
+
+//Variables needed for bluetooth
+// Define BLE service and characteristic
+BLEService myService("12345678-1234-5678-1234-56789abcdef0"); // Custom UUID
+BLEStringCharacteristic myCharacteristic("abcdefab-cdef-1234-5678-abcdefabcdef", BLERead | BLENotify, 20); // 20-b
 
 HX711 scale;
 
@@ -111,8 +117,26 @@ void init_gpio() {
   pinMode(PWM_PIN, OUTPUT);
 }
 
+void init_BLE() {
+  delay(2000);
+  Serial.println("Starting BLE!");
+
+  if (!BLE.begin()) {
+      Serial.println("Failed to start BLE!");
+      while (1);
+  }
+
+  BLE.setLocalName("NanoESP32_BLE");  // Device name
+  BLE.setAdvertisedService(myService);
+  myService.addCharacteristic(myCharacteristic);
+  BLE.addService(myService);
+
+  BLE.advertise(); // Start advertising
+  Serial.println("BLE device ready & advertising...");
+}
+
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   scale.begin(D_OUT, CLK);
 
   //Load cell setup
@@ -121,11 +145,23 @@ void setup() {
 
   //conductivity sensor setup
   init_gpio();
-  }
 
+  //Initialize BLE
+  init_BLE();
+}
+
+void transmit_BLE(float data) {
+  myCharacteristic.writeValue(data);  // Send data back to phone
+  Serial.println("Sent: " + data);
+  delay(1000);
 }
 
 void loop() {
+  Serial.println("Attemoting to connect BLE!");
+  BLEDevice central = BLE.central();
+  Serial.print("Connected to: ");
+  Serial.println(central.address());
+
   //Load cell functionality
   float weight = read_weight(); 
   Serial.print("Current weight: ");
@@ -156,6 +192,14 @@ void loop() {
 
   // Generate PWM Signal (50% duty cycle)
   analogWrite(PWM_PIN, 127); // 127 = 50% (range is 0-255)
+
+  //Data transmission:
+  //load cell
+  transmit_BLE(weight)
+
+  //Conductivity
+  transmit_BLE(calculated_conductivity)
+  transmit_BLE(calculated_temp)
 
   delay(500); 
 }

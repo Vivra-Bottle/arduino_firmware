@@ -3,50 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLE Data Viewer</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-        #countDisplay { font-size: 24px; margin-top: 20px; color: blue; }
-    </style>
+    <title>ESP32 BLE with Web Bluetooth API</title>
 </head>
 <body>
-    <h2>ESP32 BLE Counter</h2>
+    <h1>Connect to ESP32 over Bluetooth</h1>
     <button id="connectBtn">Connect to ESP32</button>
-    <p>Data from ESP32:</p>
-    <p id="countDisplay">Not connected...</p>
+    <p id="status">Status: Not connected</p>
+    <p id="receivedData">Received Data: None</p>
 
     <script>
-        let device;
-        let characteristic;
+        let bleDevice;
+        let bleServer;
+        let bleService;
+        let bleCharacteristic;
 
-        async function connectToBLE() {
+        const SERVICE_UUID = "12345678-1234-5678-1234-56789abcdef0"; // Custom Service UUID
+        const CHARACTERISTIC_UUID = "abcdefab-cdef-1234-5678-abcdefabcdef"; // Custom Characteristic UUID
+
+        document.getElementById("connectBtn").addEventListener("click", async () => {
             try {
-                device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: false,
-                    filters: [{ name: "NanoESP32_BLE" }], // Match your ESP32 name
-                    optionalServices: ["12345678-1234-5678-1234-56789abcdef0"] // Service UUID
+                console.log("Requesting Bluetooth Device...");
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [SERVICE_UUID]
                 });
 
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService("12345678-1234-5678-1234-56789abcdef0");
-                characteristic = await service.getCharacteristic("abcdefab-cdef-1234-5678-abcdefabcdef");
+                console.log("Connecting to GATT Server...");
+                bleServer = await bleDevice.gatt.connect();
 
-                characteristic.addEventListener("characteristicvaluechanged", handleData);
-                await characteristic.startNotifications();
-                document.getElementById("countDisplay").innerText = "Connected! Waiting for data...";
+                console.log("Getting Service...");
+                bleService = await bleServer.getPrimaryService(SERVICE_UUID);
+
+                console.log("Getting Characteristic...");
+                bleCharacteristic = await bleService.getCharacteristic(CHARACTERISTIC_UUID);
+
+                document.getElementById("status").innerText = "Status: Connected";
+
+                // Enable notifications
+                await bleCharacteristic.startNotifications();
+                bleCharacteristic.addEventListener("characteristicvaluechanged", handleNotifications);
+
+                console.log("Connected! Waiting for data...");
             } catch (error) {
-                console.error("BLE Connection Error: ", error);
-                document.getElementById("countDisplay").innerText = "Connection failed!";
+                console.log("Error:", error);
+                document.getElementById("status").innerText = "Status: Failed to connect";
             }
-        }
+        });
 
-        function handleData(event) {
+        function handleNotifications(event) {
             let value = new TextDecoder().decode(event.target.value);
             console.log("Received:", value);
-            document.getElementById("countDisplay").innerText = "Count: " + value;
+            // document.getElementById("receivedData").innerText = "Received Data: " + value;
+            document.getElementById("receivedData").innerText += "Received Data: "+ value + "\n";
         }
-
-        document.getElementById("connectBtn").addEventListener("click", connectToBLE);
     </script>
 </body>
 </html>

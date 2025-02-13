@@ -7,6 +7,9 @@ BLEStringCharacteristic myCharacteristic("abcdefab-cdef-1234-5678-abcdefabcdef",
 
 void setup() {
     Serial.begin(115200);
+    delay(2000);
+
+    Serial.println("Starting BLE!");
 
     if (!BLE.begin()) {
         Serial.println("Failed to start BLE!");
@@ -23,6 +26,7 @@ void setup() {
 }
 
 void loop() {
+    Serial.println("Attemoting to connect BLE!");
     BLEDevice central = BLE.central();  // Wait for a BLE connection
 
     if (central) {
@@ -31,10 +35,16 @@ void loop() {
 
         int count = 0;
         while (central.connected()) {
-            String dataToSend = "Count: " + String(count++);
-            myCharacteristic.writeValue(dataToSend);
-            Serial.println("Sent: " + dataToSend);
-            delay(1000);  // Send data every second
+            if (myCharacteristic.written()) {  // Check if data is received
+                String receivedData = myCharacteristic.value();  // Read the value
+                Serial.print("Value received: ");
+                Serial.println(receivedData);
+            }
+
+            String funData = "I love Wsully and MSizzle!";
+            myCharacteristic.writeValue(funData);  // Send data back to phone
+            Serial.println("Sent: " + funData);
+            delay(1000);
         }
 
         Serial.println("Disconnected...");

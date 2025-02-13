@@ -70,6 +70,7 @@ void loop() {
     // Print results to Serial Monitor
     Serial.print("Conductivity: ");
     Serial.print(calculated_conductivity);
+    
     Serial.print(" | Temperature: ");
     Serial.println(calculated_temp);
 
@@ -78,5 +79,6 @@ void loop() {
 
     // Generate PWM Signal (50% duty cycle)
     analogWrite(PWM_PIN, 127); // 127 = 50% (range is 0-255)
+
     delay(500);
 }
