@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BLE Data Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        #countDisplay { font-size: 24px; margin-top: 20px; color: blue; }
+    </style>
+</head>
+<body>
+    <h2>ESP32 BLE Counter</h2>
+    <button id="connectBtn">Connect to ESP32</button>
+    <p>Data from ESP32:</p>
+    <p id="countDisplay">Not connected...</p>
+
+    <script>
+        let device;
+        let characteristic;
+
+        async function connectToBLE() {
+            try {
+                device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: false,
+                    filters: [{ name: "NanoESP32_BLE" }], // Match your ESP32 name
+                    optionalServices: ["12345678-1234-5678-1234-56789abcdef0"] // Service UUID
+                });
+
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService("12345678-1234-5678-1234-56789abcdef0");
+                characteristic = await service.getCharacteristic("abcdefab-cdef-1234-5678-abcdefabcdef");
+
+                characteristic.addEventListener("characteristicvaluechanged", handleData);
+                await characteristic.startNotifications();
+                document.getElementById("countDisplay").innerText = "Connected! Waiting for data...";
+            } catch (error) {
+                console.error("BLE Connection Error: ", error);
+                document.getElementById("countDisplay").innerText = "Connection failed!";
+            }
+        }
+
+        function handleData(event) {
+            let value = new TextDecoder().decode(event.target.value);
+            console.log("Received:", value);
+            document.getElementById("countDisplay").innerText = "Count: " + value;
+        }
+
+        document.getElementById("connectBtn").addEventListener("click", connectToBLE);
+    </script>
+</body>
+</html>

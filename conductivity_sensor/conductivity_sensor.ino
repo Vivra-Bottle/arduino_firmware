@@ -1,43 +1,82 @@
-#include "HX711.h"
+//GPIO pins
+#define INPUT1_PIN 2
+#define OUTPUT1_PIN 4
 
-// Define HX711 pins
-#define DT_PIN  3  // Data pin (DT)
-#define SCK_PIN 2  // Clock pin (SCK)
+//ADC Pins
+#define ADC1_PIN A0 
+#define ADC2_PIN A1
+#define ADC3_PIN A2
 
-HX711 scale;
+//PWM Pins
+#define PWM_PIN 5
+
+// Conductivity sensor variables
+float temperature = 0;
+float voltage = 0;
+float current = 0;
+float calculated_conductivity;
+float calculated_temp;
+
+// Constants for conductivity and temperature calculation
+float kcell = 1.0;
+float Temp0 = 25.0;
+float alpha = 0.02;
+
+//Conductivity sensor helper functions
+float calculate_conductivity(float voltage) {
+	conductivity = kcell/voltage;
+	return conductivity;
+}
+
+float calculate_temperature(float voltage, float current) {
+	resistance = voltage/current;
+	calculated_temperature = Temp0 + ((resistance - 1)/alpha);
+	return calculated_temperature;
+}
 
 void setup() {
-    Serial.begin(9600);  // Start serial communication
-    scale.begin(DT_PIN, SCK_PIN);  // Initialize HX711
+  Serial.begin(115200);
 
-    Serial.println("Initializing scale...");
+  //GPIO Inputs
+  pinMode(INPUT1_PIN, INPUT);
+  pinMode(INPUT2_PIN, INPUT);
 
-    if (!scale.is_ready()) {
-        Serial.println("HX711 not found. Check wiring.");
-        while (1);  // Stop execution
-    }
+  //GPIO Outputs
+  pinMode(OUTPUT1_PIN, OUTPUT);
 
-    Serial.println("Place a known weight on the scale to calibrate.");
-    delay(5000);  // Wait 5 seconds for user input
-    long zeroOffset = scale.read_average(10);  // Get the zero offset
-    Serial.print("Zero offset: ");
-    Serial.println(zeroOffset);
+  //ADC Pins
+  pinMode(ADC1_PIN, INPUT);
+  pinMode(ADC2_PIN, INPUT);
+  pinMode(ADC3_PIN, INPUT);
 
-    scale.set_scale(2280.f);  // Set scale factor (Adjust based on calibration)
-    scale.tare();  // Reset the scale to zero
-
-    Serial.println("Scale ready!");
+  //PWM Pin
+  pinMode(PWM_PIN, OUTPUT);
 }
 
 void loop() {
-    if (scale.is_ready()) {
-        float weight = scale.get_units(10);  // Read weight in grams
-        Serial.print("Weight: ");
-        Serial.print(weight, 2);
-        Serial.println(" g");
-    } else {
-        Serial.println("HX711 not ready");
-    }
+   // Reading GPIO inputs
+    int input1 = digitalRead(INPUT1_PIN);
+    int input2 = digitalRead(INPUT2_PIN);
 
-    delay(500);  // Wait before next reading
+    // Read ADC input values
+    voltage = analogRead(ADC1_PIN);
+    current = analogRead(ADC2_PIN);
+    temperature = analogRead(ADC3_PIN);
+
+    // Perform calculations
+    calculated_conductivity = calculate_conductivity(voltage);
+    calculated_temp = calculate_temperature(voltage, current);
+
+    // Print results to Serial Monitor
+    Serial.print("Conductivity: ");
+    Serial.print(calculated_conductivity);
+    Serial.print(" | Temperature: ");
+    Serial.println(calculated_temp);
+
+    // Set GPIO Output based on Input 1
+    digitalWrite(OUTPUT1_PIN, input1);
+
+    // Generate PWM Signal (50% duty cycle)
+    analogWrite(PWM_PIN, 127); // 127 = 50% (range is 0-255)
+    delay(500);
 }

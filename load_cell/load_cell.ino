@@ -1,43 +1,66 @@
 #include "HX711.h"
 
-// Define HX711 pins
-#define DT_PIN  3  // Data pin (DT)
-#define SCK_PIN 2  // Clock pin (SCK)
+// Define pins used for loadcell
+#define D_OUT  2  // Data pin (DT)
+#define CLK 3  // Clock pin (SCK)
+
+long calibration_factor = 0;
+float known_weight = 10.0;
 
 HX711 scale;
 
+void find_calibration_factor() {
+  scale.set_scale();
+  scale.tare();
+  delay(5000);
+
+  long raw_zero = scale.get_units(10);
+  Serial.print("Raw zero reading: ");
+  Serial.println(raw_zero);
+  delay(5000);
+
+  Serial.println("Measuring raw value with the known weight...");
+  delay(5000);
+  long raw_with_weight = scale.get_units(10);
+  Serial.print("Raw reading with weight: ");
+  Serial.println(raw_with_weight);
+
+  long change_in_raw_value = raw_with_weight - raw_zero;
+  calibration_factor = known_weight / change_in_raw_value;
+  Serial.print("Calibration factor: ");
+  Serial.println(calibration_factor);
+  
+  calibration_factor = calibration_factor;
+  scale.set_scale(calibration_factor);
+}
+
 void setup() {
-    Serial.begin(9600);  // Start serial communication
-    scale.begin(DT_PIN, SCK_PIN);  // Initialize HX711
+  Serial.begin(9600);
+  scale.begin(D_OUT, CLK);
 
-    Serial.println("Initializing scale...");
+  Serial.println("Do you need calibration? (y/n)");
+  while (Serial.available() == 0) {}
 
-    if (!scale.is_ready()) {
-        Serial.println("HX711 not found. Check wiring.");
-        while (1);  // Stop execution
-    }
+  char user_input = Serial.read();
+  user_input = toLowerCase(user_input);
 
-    Serial.println("Place a known weight on the scale to calibrate.");
-    delay(5000);  // Wait 5 seconds for user input
-    long zeroOffset = scale.read_average(10);  // Get the zero offset
-    Serial.print("Zero offset: ");
-    Serial.println(zeroOffset);
+  if (user_input == 'y') {  
+    Serial.println("Starting calibration...");
+    find_calibration_factor();
 
-    scale.set_scale(2280.f);  // Set scale factor (Adjust based on calibration)
-    scale.tare();  // Reset the scale to zero
+    Serial.println("Calibration complete.");
+    Serial.print("Calibration factor: ");
+    Serial.println(calibration_factor);
+  }
 
-    Serial.println("Scale ready!");
 }
 
 void loop() {
-    if (scale.is_ready()) {
-        float weight = scale.get_units(10);  // Read weight in grams
-        Serial.print("Weight: ");
-        Serial.print(weight, 2);
-        Serial.println(" g");
-    } else {
-        Serial.println("HX711 not ready");
-    }
-
-    delay(500);  // Wait before next reading
+  float weight = scale.get_units(10); 
+  
+  Serial.print("Current weight: ");
+  Serial.print(weight);
+  Serial.println(" lbs");
+  
+  delay(1000); 
 }
