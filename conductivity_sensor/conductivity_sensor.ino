@@ -1,48 +1,69 @@
-//GPIO pins
-#define INPUT1_PIN 2
-#define OUTPUT1_PIN 4
+// // //GPIO pins
+// #define INPUT1_PIN 2
+// #define OUTPUT1_PIN 4
 
 //ADC Pins
 #define ADC1_PIN A0 
 #define ADC2_PIN A1
 #define ADC3_PIN A2
+// #define ADC4_PIN A3
 
 //PWM Pins
-#define PWM_PIN 5
+#define PWM_PIN1 5
+#define PWM_PIN2 6
 
-// Conductivity sensor variables
-float temperature = 0;
-float voltage = 0;
-float current = 0;
+// temperature sensor variables
+// float temperature = 0;
+// float voltage = 0;
+// float current = 0;
 float calculated_conductivity;
 float calculated_temp;
+float calculated_conductivity_standard;
 
-// Constants for conductivity and temperature calculation
+// Constants for conductivity sensor calculations
 float kcell = 1.0;
 float Temp0 = 25.0;
-float alpha = 0.02;
+float R0 = 100.0; //Needs to be measured
+float alpha = 0.00393; //degrees C ^ -1
+float pwm_voltage;
+float TC = 0.02; //Might need to change
 
-//Conductivity sensor helper functions
-float calculate_conductivity(float voltage) {
-	conductivity = kcell/voltage;
+float calculate_conductivity(float v1, float v2) {
+  float v_diff = abs(v1-v2);
+
+	conductivity = kcell/v_diff; //Outputs in microsemens/cm
 	return conductivity;
 }
 
-float calculate_temperature(float voltage, float current) {
-	resistance = voltage/current;
-	calculated_temperature = Temp0 + ((resistance - 1)/alpha);
-	return calculated_temperature;
+float calculate_temperature(float Vt_out) {
+  //PWM Voltage per michael 
+  pwm_voltage = 0;
+
+  float v_diff = abs(pwm_voltage-Vt_out);
+
+	resistance = v_diff/(1*10^-6); //Resistance in ohms
+
+  Serial.print("Resistance0 for calibration: ");
+  Serial.print(resistance);
+
+	calculated_temp = Temp0 + (((resistance/R0) - 1)/alpha);
+	return calculated_temp;
+}
+
+float calculate_standard_conductivity(float calculated_conductivity, float calculated_temp) {
+  float specific_conductance = calculated_conductivity/(1 + TC * (calculated_temp - 25));
+  return specific_conductance;
 }
 
 void setup() {
   Serial.begin(115200);
 
-  //GPIO Inputs
-  pinMode(INPUT1_PIN, INPUT);
-  pinMode(INPUT2_PIN, INPUT);
+  // //GPIO Inputs
+  // pinMode(INPUT1_PIN, INPUT);
+  // pinMode(INPUT2_PIN, INPUT);
 
-  //GPIO Outputs
-  pinMode(OUTPUT1_PIN, OUTPUT);
+  // //GPIO Outputs
+  // pinMode(OUTPUT1_PIN, OUTPUT);
 
   //ADC Pins
   pinMode(ADC1_PIN, INPUT);
@@ -50,35 +71,46 @@ void setup() {
   pinMode(ADC3_PIN, INPUT);
 
   //PWM Pin
-  pinMode(PWM_PIN, OUTPUT);
+  pinMode(PWM_PIN1, OUTPUT);
+  pinMode(PWM_PIN2, OUTPUT);
 }
 
 void loop() {
-   // Reading GPIO inputs
-    int input1 = digitalRead(INPUT1_PIN);
-    int input2 = digitalRead(INPUT2_PIN);
+  //  // Reading GPIO inputs
+  //   int input1 = digitalRead(INPUT1_PIN);
+  //   int input2 = digitalRead(INPUT2_PIN);
 
-    // Read ADC input values
-    voltage = analogRead(ADC1_PIN);
-    current = analogRead(ADC2_PIN);
-    temperature = analogRead(ADC3_PIN);
+    analogWrite(PWM_PIN1, 127); // 127 = 50% (range is 0-255)
+    analogWrite(PWM_PIN2, 127); // 127 = 50% (range is 0-255)
 
-    // Perform calculations
-    calculated_conductivity = calculate_conductivity(voltage);
-    calculated_temp = calculate_temperature(voltage, current);
+    //Cond. sensor
+    v1 = analogRead(ADC1_PIN);
+    v2 = analogRead(ADC2_PIN);
+    // a_diff = analogRead(ADC3_PIN);
+
+    calculated_conductivity = calculate_conductivity(v1, v2); //Potentially look at adding current(a_diff) into this equation
+
+    //Temp sensor
+    Vt_out = analogRead(ADC3_PIN);
+
+    //ASK MSIZZLE ABOUT RESISTORS FOR PWM TO CALC. VOTLAGE OF PWM 
+    calculated_temp = calculate_temperature(Vt_out);
+
+    calculated_conductivity_standard = calculate_standard_contivity(calculated_conductivity, calculated_temp)
 
     // Print results to Serial Monitor
     Serial.print("Conductivity: ");
     Serial.print(calculated_conductivity);
-    
+
     Serial.print(" | Temperature: ");
     Serial.println(calculated_temp);
 
-    // Set GPIO Output based on Input 1
-    digitalWrite(OUTPUT1_PIN, input1);
 
-    // Generate PWM Signal (50% duty cycle)
-    analogWrite(PWM_PIN, 127); // 127 = 50% (range is 0-255)
+    Serial.print(" | Standard Conductivity: ");
+    Serial.println(calculated_conductivity_standard);
+
+    // // Set GPIO Output based on Input 1
+    // digitalWrite(OUTPUT1_PIN, input1);
 
     delay(500);
 }
