@@ -1,7 +1,3 @@
-// // //GPIO pins
-// #define INPUT1_PIN 2
-// #define OUTPUT1_PIN 4
-
 //ADC Pins
 #define ADC1_PIN A0 
 #define ADC2_PIN A1
@@ -12,13 +8,12 @@
 #define PWM_PIN1 5
 #define PWM_PIN2 6
 
-// temperature sensor variables
-// float temperature = 0;
-// float voltage = 0;
-// float current = 0;
 float calculated_conductivity;
 float calculated_temp;
 float calculated_conductivity_standard;
+float conductivity;
+float resistance;
+float v1, v2;
 
 // Constants for conductivity sensor calculations
 float kcell = 1.0;
@@ -58,13 +53,6 @@ float calculate_standard_conductivity(float calculated_conductivity, float calcu
 void setup() {
   Serial.begin(115200);
 
-  // //GPIO Inputs
-  // pinMode(INPUT1_PIN, INPUT);
-  // pinMode(INPUT2_PIN, INPUT);
-
-  // //GPIO Outputs
-  // pinMode(OUTPUT1_PIN, OUTPUT);
-
   //ADC Pins
   pinMode(ADC1_PIN, INPUT);
   pinMode(ADC2_PIN, INPUT);
@@ -76,41 +64,34 @@ void setup() {
 }
 
 void loop() {
-  //  // Reading GPIO inputs
-  //   int input1 = digitalRead(INPUT1_PIN);
-  //   int input2 = digitalRead(INPUT2_PIN);
+  // Initializing PWM
+  analogWrite(PWM_PIN1, 127); // 127 = 50% (range is 0-255)
+  analogWrite(PWM_PIN2, 127); // 127 = 50% (range is 0-255)
 
-    analogWrite(PWM_PIN1, 127); // 127 = 50% (range is 0-255)
-    analogWrite(PWM_PIN2, 127); // 127 = 50% (range is 0-255)
+  //Cond. sensor
+  v1 = analogRead(ADC1_PIN);
+  v2 = analogRead(ADC2_PIN);
 
-    //Cond. sensor
-    v1 = analogRead(ADC1_PIN);
-    v2 = analogRead(ADC2_PIN);
-    // a_diff = analogRead(ADC3_PIN);
+  calculated_conductivity = calculate_conductivity(v1, v2); //Potentially look at adding current(a_diff) into this equation
 
-    calculated_conductivity = calculate_conductivity(v1, v2); //Potentially look at adding current(a_diff) into this equation
+  //Temp sensor
+  float Vt_out = analogRead(ADC3_PIN);
 
-    //Temp sensor
-    Vt_out = analogRead(ADC3_PIN);
+  //ASK MSIZZLE ABOUT RESISTORS FOR PWM TO CALC. VOTLAGE OF PWM 
+  calculated_temp = calculate_temperature(Vt_out);
 
-    //ASK MSIZZLE ABOUT RESISTORS FOR PWM TO CALC. VOTLAGE OF PWM 
-    calculated_temp = calculate_temperature(Vt_out);
+  calculated_conductivity_standard = calculate_standard_conductivity(calculated_conductivity, calculated_temp);
 
-    calculated_conductivity_standard = calculate_standard_contivity(calculated_conductivity, calculated_temp)
+  // Print results to Serial Monitor
+  Serial.print("Conductivity: ");
+  Serial.print(calculated_conductivity);
 
-    // Print results to Serial Monitor
-    Serial.print("Conductivity: ");
-    Serial.print(calculated_conductivity);
-
-    Serial.print(" | Temperature: ");
-    Serial.println(calculated_temp);
+  Serial.print(" | Temperature: ");
+  Serial.println(calculated_temp);
 
 
-    Serial.print(" | Standard Conductivity: ");
-    Serial.println(calculated_conductivity_standard);
+  Serial.print(" | Standard Conductivity: ");
+  Serial.println(calculated_conductivity_standard);
 
-    // // Set GPIO Output based on Input 1
-    // digitalWrite(OUTPUT1_PIN, input1);
-
-    delay(500);
+  delay(500);
 }

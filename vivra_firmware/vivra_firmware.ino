@@ -1,33 +1,35 @@
 #include "HX711.h"
 #include <ArduinoBLE.h>
+#include <Arduino.h>
 
 // Define pins used for loadcell
 #define D_OUT  2  // Data pin (DT)
 #define CLK 3  // Clock pin (SCK)
 
-// Define GPIO pins
-#define INPUT1_PIN 2
-#define OUTPUT1_PIN 4
-
-// ADC Pins
+//ADC Pins
 #define ADC1_PIN A0 
 #define ADC2_PIN A1
 #define ADC3_PIN A2
 
-// PWM Pin
-#define PWM_PIN 5
+//PWM Pins
+#define PWM_PIN1 5
+#define PWM_PIN2 6
 
 // Conductivity sensor variables
-float temperature = 0;
-float voltage = 0;
-float current = 0;
 float calculated_conductivity;
 float calculated_temp;
+float calculated_conductivity_standard;
+float conductivity;
+float resistance;
+float v1, v2;
 
-// Constants for conductivity and temperature calculation
+// Constants for conductivity sensor calculations
 float kcell = 1.0;
 float Temp0 = 25.0;
-float alpha = 0.02;
+float R0 = 100.0; //Needs to be measured
+float alpha = 0.00393; //degrees C ^ -1
+float pwm_voltage;
+float TC = 0.02; //Might need to change
 
 //Load cell variables
 long calibration_factor = 0;
@@ -90,31 +92,43 @@ void handle_user_input_for_calibration() {
 }
 
 // Conductivity sensor helper functions
-float calculate_conductivity(float voltage) {
-  return kcell / voltage;
+float calculate_conductivity(float v1, float v2) {
+  float v_diff = abs(v1-v2);
+
+	conductivity = kcell/v_diff; //Outputs in microsemens/cm
+	return conductivity;
 }
 
-float calculate_temperature(float voltage, float current) {
-  float resistance = voltage / current;
-  return Temp0 + ((resistance - 1) / alpha);
+float calculate_temperature(float Vt_out) {
+  //PWM Voltage per michael 
+  pwm_voltage = 0;
+
+  float v_diff = abs(pwm_voltage-Vt_out);
+
+	resistance = v_diff/(1*10^-6); //Resistance in ohms
+
+  Serial.print("Resistance0 for calibration: ");
+  Serial.print(resistance);
+
+	calculated_temp = Temp0 + (((resistance/R0) - 1)/alpha);
+	return calculated_temp;
+}
+
+float calculate_standard_conductivity(float calculated_conductivity, float calculated_temp) {
+  float specific_conductance = calculated_conductivity/(1 + TC * (calculated_temp - 25));
+  return specific_conductance;
 }
 
 // Function to initialize GPIO and ADC pins for the conductivity sensor
-void init_gpio() {
-  // GPIO Inputs
-  pinMode(INPUT1_PIN, INPUT);
-  pinMode(INPUT2_PIN, INPUT);
-
-  // GPIO Outputs
-  pinMode(OUTPUT1_PIN, OUTPUT);
-
-  // ADC Pins
+void init_cond_pins() {
+  //ADC Pins
   pinMode(ADC1_PIN, INPUT);
   pinMode(ADC2_PIN, INPUT);
   pinMode(ADC3_PIN, INPUT);
 
-  // PWM Pin
-  pinMode(PWM_PIN, OUTPUT);
+  //PWM Pin
+  pinMode(PWM_PIN1, OUTPUT);
+  pinMode(PWM_PIN2, OUTPUT);
 }
 
 void init_BLE() {
@@ -144,15 +158,17 @@ void setup() {
   handle_user_input_for_calibration();
 
   //conductivity sensor setup
-  init_gpio();
+  init_cond_pins();
 
   //Initialize BLE
   init_BLE();
 }
 
 void transmit_BLE(float data) {
-  myCharacteristic.writeValue(data);  // Send data back to phone
-  Serial.println("Sent: " + data);
+  String strData = String(data, 2);
+  myCharacteristic.writeValue(strData);  // Send data back to phone
+  Serial.println("Sent: ");
+  Serial.println(data);
   delay(1000);
 }
 
@@ -168,38 +184,42 @@ void loop() {
   Serial.print(weight);
   Serial.println(" lbs");
 
-  // Read GPIO inputs for conductivity sensor
-  int input1 = digitalRead(INPUT1_PIN);
-  int input2 = digitalRead(INPUT2_PIN);
+  // Initializing PWM
+  analogWrite(PWM_PIN1, 127); // 127 = 50% (range is 0-255)
+  analogWrite(PWM_PIN2, 127); // 127 = 50% (range is 0-255)
 
-  // Read ADC input values for conductivity sensor
-  voltage = analogRead(ADC1_PIN);
-  current = analogRead(ADC2_PIN);
-  temperature = analogRead(ADC3_PIN);
+  //Cond. sensor
+  v1 = analogRead(ADC1_PIN);
+  v2 = analogRead(ADC2_PIN);
 
-  // Perform conductivity and temperature calculations
-  calculated_conductivity = calculate_conductivity(voltage);
-  calculated_temp = calculate_temperature(voltage, current);
+  calculated_conductivity = calculate_conductivity(v1, v2); //Potentially look at adding current(a_diff) into this equation
 
-  // Print conductivity and temperature readings
+  //Temp sensor
+  float Vt_out = analogRead(ADC3_PIN);
+
+  //ASK MSIZZLE ABOUT RESISTORS FOR PWM TO CALC. VOTLAGE OF PWM 
+  calculated_temp = calculate_temperature(Vt_out);
+
+  calculated_conductivity_standard = calculate_standard_conductivity(calculated_conductivity, calculated_temp);
+
+  // Print results to Serial Monitor
   Serial.print("Conductivity: ");
   Serial.print(calculated_conductivity);
+
   Serial.print(" | Temperature: ");
   Serial.println(calculated_temp);
 
-  // Set GPIO Output based on Input 1 (for the conductivity sensor)
-  digitalWrite(OUTPUT1_PIN, input1);
 
-  // Generate PWM Signal (50% duty cycle)
-  analogWrite(PWM_PIN, 127); // 127 = 50% (range is 0-255)
+  Serial.print(" | Standard Conductivity: ");
+  Serial.println(calculated_conductivity_standard);
 
   //Data transmission:
   //load cell
-  transmit_BLE(weight)
+  transmit_BLE(weight);
 
   //Conductivity
-  transmit_BLE(calculated_conductivity)
-  transmit_BLE(calculated_temp)
+  transmit_BLE(calculated_conductivity);
+  transmit_BLE(calculated_temp);
 
   delay(500); 
 }
